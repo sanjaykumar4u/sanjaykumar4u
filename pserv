@@ -1,0 +1,53 @@
+import os
+import sys
+from urllib.parse import quote
+import netifaces
+import http.server
+import socketserver
+
+# Set the directory to the script's directory
+directory = os.path.dirname(os.path.realpath(__file__))
+
+# Get the IP address of the tun0 interface using netifaces
+try:
+    tun0_ip = netifaces.ifaddresses('tun0')[netifaces.AF_INET][0]['addr']
+except KeyError:
+    print("Couldn't determine tun0 IP address. Make sure tun0 is active.")
+    sys.exit(1)
+
+# Get the port number from the command-line arguments or use a default value
+if len(sys.argv) > 1:
+    try:
+        port = int(sys.argv[1])
+    except ValueError:
+        print("Invalid port number. Using the default port 8083.")
+        port = 8083
+else:
+    port = 8083
+
+# Get a list of files in the directory
+try:
+    entries = os.listdir(directory)
+except OSError:
+    print(f"No permission to list directory: {directory}")
+    sys.exit(1)
+
+entries.sort(key=lambda entry: entry.lower())
+
+# Print the file URLs to the console excluding the script file
+script_file = os.path.basename(__file__)
+for name in entries:
+    if name != script_file:
+        file_url = f'http://{tun0_ip}:{port}/{quote(name)}'
+        print(file_url)
+
+# Start the HTTP server
+Handler = http.server.SimpleHTTPRequestHandler
+os.chdir(directory)
+
+with socketserver.TCPServer(("", port), Handler) as httpd:
+    print(f"Serving on http://{tun0_ip}:{port}")
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\nServer terminated by user.")
